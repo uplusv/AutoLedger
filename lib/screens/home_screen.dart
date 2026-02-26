@@ -63,6 +63,10 @@ class _HomeScreenState extends State<HomeScreen> {
             icon: const Icon(Icons.pie_chart),
             onPressed: () => Navigator.pushNamed(context, '/stats'),
           ),
+          IconButton(
+            icon: const Icon(Icons.settings),
+            onPressed: () => Navigator.pushNamed(context, '/settings'),
+          ),
         ],
       ),
       body: Column(

@@ -118,4 +118,23 @@ class DatabaseService {
     );
     return maps.map((m) => model.Transaction.fromMap(m)).toList();
   }
+
+  // 获取每日支出（用于趋势图）
+  static Future<List<Map<String, dynamic>>> getDailyExpenses(int year, int month) async {
+    final db = await database;
+    final start = DateTime(year, month, 1).toIso8601String();
+    final end = DateTime(year, month + 1, 1).toIso8601String();
+    
+    final result = await db.rawQuery('''
+      SELECT 
+        CAST(strftime('%d', time) AS INTEGER) as day,
+        SUM(amount) as total
+      FROM $tableName
+      WHERE time >= ? AND time < ?
+      GROUP BY day
+      ORDER BY day
+    ''', [start, end]);
+    
+    return result;
+  }
 }
