@@ -18,7 +18,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 2, // 升级数据库版本
+      version: 3, // 升级数据库版本
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE $tableName (
@@ -29,13 +29,17 @@ class DatabaseService {
             subCategory TEXT,
             time TEXT NOT NULL,
             note TEXT,
-            source TEXT NOT NULL
+            source TEXT NOT NULL,
+            ledgerId TEXT DEFAULT 'default'
           )
         ''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await db.execute('ALTER TABLE $tableName ADD COLUMN subCategory TEXT');
+        }
+        if (oldVersion < 3) {
+          await db.execute('ALTER TABLE $tableName ADD COLUMN ledgerId TEXT DEFAULT "default"');
         }
       },
     );
@@ -54,33 +58,57 @@ class DatabaseService {
     return maps.map((m) => model.Transaction.fromMap(m)).toList();
   }
 
-  // 按月份获取
-  static Future<List<model.Transaction>> getByMonth(int year, int month) async {
+  // 按月份获取（支持账本过滤）
+  static Future<List<model.Transaction>> getByMonth(
+    int year,
+    int month, {
+    String? ledgerId,
+  }) async {
     final db = await database;
     final start = DateTime(year, month, 1).toIso8601String();
     final end = DateTime(year, month + 1, 1).toIso8601String();
     
+    String whereClause = 'time >= ? AND time < ?';
+    List<dynamic> whereArgs = [start, end];
+    
+    if (ledgerId != null) {
+      whereClause += ' AND ledgerId = ?';
+      whereArgs.add(ledgerId);
+    }
+    
     final maps = await db.query(
       tableName,
-      where: 'time >= ? AND time < ?',
-      whereArgs: [start, end],
+      where: whereClause,
+      whereArgs: whereArgs,
       orderBy: 'time DESC',
     );
     return maps.map((m) => model.Transaction.fromMap(m)).toList();
   }
 
-  // 获取分类统计
-  static Future<Map<String, double>> getCategoryStats(int year, int month) async {
+  // 获取分类统计（支持账本过滤）
+  static Future<Map<String, double>> getCategoryStats(
+    int year,
+    int month, {
+    String? ledgerId,
+  }) async {
     final db = await database;
     final start = DateTime(year, month, 1).toIso8601String();
     final end = DateTime(year, month + 1, 1).toIso8601String();
     
+    String whereClause = 'time >= ? AND time < ?';
+    List<dynamic> whereArgs = [start, end];
+    
+    if (ledgerId != null) {
+      whereClause += ' AND ledgerId = ?';
+      whereArgs.add(ledgerId);
+    }
+    
     final result = await db.rawQuery('''
       SELECT category, SUM(amount) as total
       FROM $tableName
-      WHERE time >= ? AND time < ?
+      WHERE $whereClause
       GROUP BY category
-    ''', [start, end]);
+    ''', whereArgs);
     
     return {
       for (var row in result) 
@@ -107,33 +135,57 @@ class DatabaseService {
     return maps.map((m) => model.Transaction.fromMap(m)).toList();
   }
 
-  // 搜索交易
-  static Future<List<model.Transaction>> search(String keyword) async {
+  // 搜索交易（支持账本过滤）
+  static Future<List<model.Transaction>> search(
+    String keyword, {
+    String? ledgerId,
+  }) async {
     final db = await database;
+    
+    String whereClause = 'merchant LIKE ? OR note LIKE ? OR category LIKE ?';
+    List<dynamic> whereArgs = ['%$keyword%', '%$keyword%', '%$keyword%'];
+    
+    if (ledgerId != null) {
+      whereClause = '($whereClause) AND ledgerId = ?';
+      whereArgs.add(ledgerId);
+    }
+    
     final maps = await db.query(
       tableName,
-      where: 'merchant LIKE ? OR note LIKE ? OR category LIKE ?',
-      whereArgs: ['%$keyword%', '%$keyword%', '%$keyword%'],
+      where: whereClause,
+      whereArgs: whereArgs,
       orderBy: 'time DESC',
     );
     return maps.map((m) => model.Transaction.fromMap(m)).toList();
   }
 
-  // 获取每日支出（用于趋势图）
-  static Future<List<Map<String, dynamic>>> getDailyExpenses(int year, int month) async {
+  // 获取每日支出（用于趋势图，支持账本过滤）
+  static Future<List<Map<String, dynamic>>> getDailyExpenses(
+    int year,
+    int month, {
+    String? ledgerId,
+  }) async {
     final db = await database;
     final start = DateTime(year, month, 1).toIso8601String();
     final end = DateTime(year, month + 1, 1).toIso8601String();
+    
+    String whereClause = 'time >= ? AND time < ?';
+    List<dynamic> whereArgs = [start, end];
+    
+    if (ledgerId != null) {
+      whereClause += ' AND ledgerId = ?';
+      whereArgs.add(ledgerId);
+    }
     
     final result = await db.rawQuery('''
       SELECT 
         CAST(strftime('%d', time) AS INTEGER) as day,
         SUM(amount) as total
       FROM $tableName
-      WHERE time >= ? AND time < ?
+      WHERE $whereClause
       GROUP BY day
       ORDER BY day
-    ''', [start, end]);
+    ''', whereArgs);
     
     return result;
   }

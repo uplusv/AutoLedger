@@ -5,20 +5,22 @@ class Transaction {
   final double amount;
   final String merchant;
   final String category;      // 一级分类
-  final String? subCategory; // 二级分类（新增）
+  final String? subCategory; // 二级分类
   final DateTime time;
   final String? note;
-  final String source; // 'wechat', 'alipay', 'manual'
+  final String source;        // 'wechat', 'alipay', 'manual'
+  final String ledgerId;      // 账本ID（新增）
 
   Transaction({
     this.id,
     required this.amount,
     required this.merchant,
     required this.category,
-    this.subCategory, // 可选
+    this.subCategory,
     required this.time,
     this.note,
     required this.source,
+    this.ledgerId = 'default', // 默认账本
   });
 
   Map<String, dynamic> toMap() {
@@ -31,6 +33,7 @@ class Transaction {
       'time': time.toIso8601String(),
       'note': note,
       'source': source,
+      'ledgerId': ledgerId,
     };
   }
 
@@ -44,6 +47,7 @@ class Transaction {
       time: DateTime.parse(map['time'] as String),
       note: map['note'] as String?,
       source: map['source'] as String,
+      ledgerId: map['ledgerId'] as String? ?? 'default',
     );
   }
 
@@ -57,6 +61,7 @@ class Transaction {
       time: DateTime.tryParse(params['time'] ?? '') ?? DateTime.now(),
       note: params['note'],
       source: params['source'] ?? 'shortcut',
+      ledgerId: params['ledgerId'] ?? 'default',
     );
   }
 
@@ -70,6 +75,7 @@ class Transaction {
     DateTime? time,
     String? note,
     String? source,
+    String? ledgerId,
   }) {
     return Transaction(
       id: id ?? this.id,
@@ -80,6 +86,7 @@ class Transaction {
       time: time ?? this.time,
       note: note ?? this.note,
       source: source ?? this.source,
+      ledgerId: ledgerId ?? this.ledgerId,
     );
   }
 

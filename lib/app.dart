@@ -3,6 +3,7 @@ import 'screens/home_screen.dart';
 import 'screens/add_screen.dart';
 import 'screens/stats_screen.dart';
 import 'screens/settings_screen.dart';
+import 'screens/ledger_manage_screen.dart';
 import 'services/url_handler_service.dart';
 
 class AccountingApp extends StatefulWidget {
@@ -34,6 +35,7 @@ class _AccountingAppState extends State<AccountingApp> {
         '/add': (context) => const AddScreen(),
         '/stats': (context) => const StatsScreen(),
         '/settings': (context) => const SettingsScreen(),
+        '/ledgers': (context) => const LedgerManageScreen(),
       },
     );
   }
