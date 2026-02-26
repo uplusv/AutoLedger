@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import '../models/transaction.dart';
 import '../services/database_service.dart';
 import '../services/smart_category_service.dart';
+import '../services/category_system.dart';
 
 class AddScreen extends StatefulWidget {
-  final Map<String, String>? initialData; // 从快捷指令传入的数据
+  final Map<String, String>? initialData;
 
   const AddScreen({super.key, this.initialData});
 
@@ -24,7 +25,8 @@ class _AddScreenState extends State<AddScreen> {
     text: widget.initialData?['note'] ?? '',
   );
   
-  String _category = '其他';
+  String _primaryCategory = '其他支出';
+  String? _subCategory;
   DateTime _time = DateTime.now();
   bool _isLoadingCategory = false;
 
@@ -34,20 +36,16 @@ class _AddScreenState extends State<AddScreen> {
     _initCategory();
   }
 
-  // 初始化分类（智能分类 + 商家学习）
+  // 初始化分类
   Future<void> _initCategory() async {
     final merchant = widget.initialData?['merchant'] ?? '';
     
-    if (widget.initialData?['category'] != null && 
-        widget.initialData!['category']!.isNotEmpty) {
-      // 快捷指令传了分类
-      setState(() => _category = widget.initialData!['category']!);
-    } else if (merchant.isNotEmpty) {
-      // 商家学习 + 智能分类
+    if (merchant.isNotEmpty) {
       setState(() => _isLoadingCategory = true);
-      final preferredCategory = await MerchantLearning.getPreferredCategory(merchant);
+      final preferred = await MerchantLearning.getPreferredCategory(merchant);
       setState(() {
-        _category = preferredCategory;
+        _primaryCategory = preferred['一级']!;
+        _subCategory = preferred['二级'];
         _isLoadingCategory = false;
       });
     }
@@ -57,16 +55,11 @@ class _AddScreenState extends State<AddScreen> {
   Future<void> _onMerchantChanged(String value) async {
     if (value.isEmpty) return;
     
-    // 先查历史
     final preferred = await MerchantLearning.getPreferredCategory(value);
-    if (preferred != '其他') {
-      // 有历史记录，使用历史分类
-      setState(() => _category = preferred);
-    } else {
-      // 没有历史，用智能分类
-      final smart = SmartCategory.categorize(value);
-      setState(() => _category = smart);
-    }
+    setState(() {
+      _primaryCategory = preferred['一级']!;
+      _subCategory = preferred['二级'];
+    });
   }
 
   @override
@@ -77,8 +70,7 @@ class _AddScreenState extends State<AddScreen> {
         padding: const EdgeInsets.all(16),
         child: Form(
           key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: ListView(
             children: [
               // 金额
               TextFormField(
@@ -104,12 +96,12 @@ class _AddScreenState extends State<AddScreen> {
               ),
               const SizedBox(height: 16),
               
-              // 分类（带智能提示）
+              // 一级分类
               Row(
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: _category,
+                      value: _primaryCategory,
                       decoration: InputDecoration(
                         labelText: '分类',
                         suffixIcon: _isLoadingCategory 
@@ -118,23 +110,59 @@ class _AddScreenState extends State<AddScreen> {
                                 height: 20, 
                                 child: CircularProgressIndicator(strokeWidth: 2),
                               )
-                            : null,
+                            : Icon(SmartCategoryService.getIcon(_primaryCategory)),
                       ),
-                      items: SmartCategory.categories.map((c) => 
-                        DropdownMenuItem(value: c, child: Text(c))
+                      items: SmartCategoryService.primaryCategories.map((c) => 
+                        DropdownMenuItem(
+                          value: c, 
+                          child: Row(
+                            children: [
+                              Icon(SmartCategoryService.getIcon(c), size: 20),
+                              const SizedBox(width: 8),
+                              Text(c),
+                            ],
+                          ),
+                        )
                       ).toList(),
-                      onChanged: (v) => setState(() => _category = v!),
+                      onChanged: (v) => setState(() {
+                        _primaryCategory = v!;
+                        _subCategory = null; // 重置二级分类
+                      }),
                     ),
                   ),
                 ],
               ),
               
+              // 二级分类
+              if (SmartCategoryService.getSubCategories(_primaryCategory).isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 16),
+                  child: DropdownButtonFormField<String>(
+                    value: _subCategory,
+                    decoration: const InputDecoration(
+                      labelText: '子分类',
+                    ),
+                    hint: const Text('选择子分类（可选）'),
+                    items: [
+                      const DropdownMenuItem(
+                        value: null,
+                        child: Text('无'),
+                      ),
+                      ...SmartCategoryService.getSubCategories(_primaryCategory).map((c) => 
+                        DropdownMenuItem(value: c, child: Text(c))
+                      ),
+                    ],
+                    onChanged: (v) => setState(() => _subCategory = v),
+                  ),
+                ),
+              
               // 智能分类提示
               if (!_isLoadingCategory && _merchantController.text.isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.only(top: 4, left: 12),
+                  padding: const EdgeInsets.only(top: 8, left: 12),
                   child: Text(
-                    '智能分类: ${SmartCategory.categorize(_merchantController.text)}',
+                    '智能识别: ${CategorySystem.smartMatch(_merchantController.text)['一级']} - '
+                    '${CategorySystem.smartMatch(_merchantController.text)['二级']}',
                     style: TextStyle(
                       fontSize: 12, 
                       color: Colors.grey[600],
@@ -184,7 +212,7 @@ class _AddScreenState extends State<AddScreen> {
                 maxLines: 3,
               ),
               
-              const Spacer(),
+              const SizedBox(height: 32),
               
               // 保存按钮
               SizedBox(
@@ -207,7 +235,8 @@ class _AddScreenState extends State<AddScreen> {
     final transaction = Transaction(
       amount: double.parse(_amountController.text),
       merchant: _merchantController.text,
-      category: _category,
+      category: _primaryCategory,
+      subCategory: _subCategory,
       time: _time,
       note: _noteController.text.isEmpty ? null : _noteController.text,
       source: widget.initialData != null ? 'shortcut' : 'manual',

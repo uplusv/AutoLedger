@@ -18,7 +18,7 @@ class DatabaseService {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2, // 升级数据库版本
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE $tableName (
@@ -26,11 +26,17 @@ class DatabaseService {
             amount REAL NOT NULL,
             merchant TEXT NOT NULL,
             category TEXT NOT NULL,
+            subCategory TEXT,
             time TEXT NOT NULL,
             note TEXT,
             source TEXT NOT NULL
           )
         ''');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('ALTER TABLE $tableName ADD COLUMN subCategory TEXT');
+        }
       },
     );
   }

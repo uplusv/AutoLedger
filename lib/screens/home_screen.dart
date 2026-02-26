@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/transaction.dart';
 import '../services/database_service.dart';
+import '../services/smart_category_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -134,10 +135,11 @@ class _HomeScreenState extends State<HomeScreen> {
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: _getCategoryColor(t.category),
-          child: Text(
-            t.category[0],
-            style: const TextStyle(color: Colors.white),
+          backgroundColor: SmartCategoryService.getColor(t.category),
+          child: Icon(
+            SmartCategoryService.getIcon(t.category),
+            color: Colors.white,
+            size: 20,
           ),
         ),
         title: Row(
@@ -149,7 +151,7 @@ class _HomeScreenState extends State<HomeScreen> {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${t.category} · ${_formatTime(t.time)}'),
+            Text('${t.fullCategory} · ${_formatTime(t.time)}'),
             if (t.note != null && t.note!.isNotEmpty)
               Text(
                 t.note!,
@@ -211,17 +213,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Color _getCategoryColor(String category) {
-    final colors = {
-      '餐饮': Colors.orange,
-      '交通': Colors.blue,
-      '购物': Colors.pink,
-      '娱乐': Colors.purple,
-      '医疗': Colors.red,
-      '教育': Colors.green,
-      '住房': Colors.brown,
-      '其他': Colors.grey,
-    };
-    return colors[category] ?? Colors.grey;
+    return SmartCategoryService.getColor(category);
   }
 
   void _showTransactionDetail(Transaction t) {
@@ -236,7 +228,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Text(t.merchant, style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: 8),
             Text('金额: ¥${t.amount.toStringAsFixed(2)}'),
-            Text('分类: ${t.category}'),
+            Text('分类: ${t.fullCategory}'),
             Text('时间: ${t.time.toString().substring(0, 19)}'),
             Text('来源: ${t.source}'),
             if (t.note != null && t.note!.isNotEmpty) Text('备注: ${t.note}'),
