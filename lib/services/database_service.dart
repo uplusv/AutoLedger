@@ -87,4 +87,29 @@ class DatabaseService {
     final db = await database;
     return await db.delete(tableName, where: 'id = ?', whereArgs: [id]);
   }
+
+  // 按商家查询历史记录（用于商家学习）
+  static Future<List<model.Transaction>> getByMerchant(String merchant, {int limit = 10}) async {
+    final db = await database;
+    final maps = await db.query(
+      tableName,
+      where: 'merchant LIKE ?',
+      whereArgs: ['%$merchant%'],
+      orderBy: 'time DESC',
+      limit: limit,
+    );
+    return maps.map((m) => model.Transaction.fromMap(m)).toList();
+  }
+
+  // 搜索交易
+  static Future<List<model.Transaction>> search(String keyword) async {
+    final db = await database;
+    final maps = await db.query(
+      tableName,
+      where: 'merchant LIKE ? OR note LIKE ? OR category LIKE ?',
+      whereArgs: ['%$keyword%', '%$keyword%', '%$keyword%'],
+      orderBy: 'time DESC',
+    );
+    return maps.map((m) => model.Transaction.fromMap(m)).toList();
+  }
 }

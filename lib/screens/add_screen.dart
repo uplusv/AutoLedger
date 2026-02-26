@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/transaction.dart';
 import '../services/database_service.dart';
+import '../services/smart_category_service.dart';
 
 class AddScreen extends StatefulWidget {
   final Map<String, String>? initialData; // 从快捷指令传入的数据
@@ -19,10 +20,54 @@ class _AddScreenState extends State<AddScreen> {
   late final _merchantController = TextEditingController(
     text: widget.initialData?['merchant'] ?? '',
   );
-  late final _noteController = TextEditingController();
+  late final _noteController = TextEditingController(
+    text: widget.initialData?['note'] ?? '',
+  );
   
-  String _category = '餐饮';
+  String _category = '其他';
   DateTime _time = DateTime.now();
+  bool _isLoadingCategory = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initCategory();
+  }
+
+  // 初始化分类（智能分类 + 商家学习）
+  Future<void> _initCategory() async {
+    final merchant = widget.initialData?['merchant'] ?? '';
+    
+    if (widget.initialData?['category'] != null && 
+        widget.initialData!['category']!.isNotEmpty) {
+      // 快捷指令传了分类
+      setState(() => _category = widget.initialData!['category']!);
+    } else if (merchant.isNotEmpty) {
+      // 商家学习 + 智能分类
+      setState(() => _isLoadingCategory = true);
+      final preferredCategory = await MerchantLearning.getPreferredCategory(merchant);
+      setState(() {
+        _category = preferredCategory;
+        _isLoadingCategory = false;
+      });
+    }
+  }
+
+  // 商家改变时重新分类
+  Future<void> _onMerchantChanged(String value) async {
+    if (value.isEmpty) return;
+    
+    // 先查历史
+    final preferred = await MerchantLearning.getPreferredCategory(value);
+    if (preferred != '其他') {
+      // 有历史记录，使用历史分类
+      setState(() => _category = preferred);
+    } else {
+      // 没有历史，用智能分类
+      final smart = SmartCategory.categorize(value);
+      setState(() => _category = smart);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,6 +78,7 @@ class _AddScreenState extends State<AddScreen> {
         child: Form(
           key: _formKey,
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // 金额
               TextFormField(
@@ -49,20 +95,53 @@ class _AddScreenState extends State<AddScreen> {
               // 商家
               TextFormField(
                 controller: _merchantController,
-                decoration: const InputDecoration(labelText: '商家/用途'),
+                decoration: const InputDecoration(
+                  labelText: '商家/交易对象',
+                  hintText: '如：星巴克、滴滴出行',
+                ),
                 validator: (v) => v?.isEmpty ?? true ? '请输入商家' : null,
+                onChanged: _onMerchantChanged,
               ),
               const SizedBox(height: 16),
               
-              // 分类
-              DropdownButtonFormField<String>(
-                value: _category,
-                decoration: const InputDecoration(labelText: '分类'),
-                items: defaultCategories.map((c) => 
-                  DropdownMenuItem(value: c, child: Text(c))
-                ).toList(),
-                onChanged: (v) => setState(() => _category = v!),
+              // 分类（带智能提示）
+              Row(
+                children: [
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: _category,
+                      decoration: InputDecoration(
+                        labelText: '分类',
+                        suffixIcon: _isLoadingCategory 
+                            ? const SizedBox(
+                                width: 20, 
+                                height: 20, 
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : null,
+                      ),
+                      items: SmartCategory.categories.map((c) => 
+                        DropdownMenuItem(value: c, child: Text(c))
+                      ).toList(),
+                      onChanged: (v) => setState(() => _category = v!),
+                    ),
+                  ),
+                ],
               ),
+              
+              // 智能分类提示
+              if (!_isLoadingCategory && _merchantController.text.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, left: 12),
+                  child: Text(
+                    '智能分类: ${SmartCategory.categorize(_merchantController.text)}',
+                    style: TextStyle(
+                      fontSize: 12, 
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ),
+              
               const SizedBox(height: 16),
               
               // 时间
@@ -78,15 +157,31 @@ class _AddScreenState extends State<AddScreen> {
                     lastDate: DateTime.now(),
                   );
                   if (date != null) {
-                    setState(() => _time = date);
+                    final time = await showTimePicker(
+                      context: context,
+                      initialTime: TimeOfDay.fromDateTime(_time),
+                    );
+                    if (time != null) {
+                      setState(() => _time = DateTime(
+                        date.year, date.month, date.day,
+                        time.hour, time.minute,
+                      ));
+                    }
                   }
                 },
               ),
               
+              const SizedBox(height: 16),
+              
               // 备注
               TextFormField(
                 controller: _noteController,
-                decoration: const InputDecoration(labelText: '备注（可选）'),
+                decoration: const InputDecoration(
+                  labelText: '备注（可选）',
+                  hintText: '如：午餐、打车回家',
+                  border: OutlineInputBorder(),
+                ),
+                maxLines: 3,
               ),
               
               const Spacer(),

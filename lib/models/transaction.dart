@@ -43,7 +43,7 @@ class Transaction {
     );
   }
 
-  // 从 URL Scheme 参数创建
+  // 从 URL Scheme 参数创建（带智能分类）
   factory Transaction.fromUrlParams(Map<String, String> params) {
     return Transaction(
       amount: double.tryParse(params['amount'] ?? '0') ?? 0,
@@ -54,9 +54,30 @@ class Transaction {
       source: params['source'] ?? 'shortcut',
     );
   }
+
+  // 复制并修改
+  Transaction copyWith({
+    String? id,
+    double? amount,
+    String? merchant,
+    String? category,
+    DateTime? time,
+    String? note,
+    String? source,
+  }) {
+    return Transaction(
+      id: id ?? this.id,
+      amount: amount ?? this.amount,
+      merchant: merchant ?? this.merchant,
+      category: category ?? this.category,
+      time: time ?? this.time,
+      note: note ?? this.note,
+      source: source ?? this.source,
+    );
+  }
 }
 
-// 预设分类
+// 预设分类 - 由 SmartCategoryService 管理
 final List<String> defaultCategories = [
   '餐饮',
   '交通',
