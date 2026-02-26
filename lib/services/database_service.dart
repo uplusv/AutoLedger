@@ -1,0 +1,90 @@
+import 'package:sqflite/sqflite.dart';
+import 'package:path/path.dart';
+import '../models/transaction.dart' as model;
+
+class DatabaseService {
+  static Database? _database;
+  static const String tableName = 'transactions';
+
+  static Future<Database> get database async {
+    if (_database != null) return _database!;
+    _database = await _initDB();
+    return _database!;
+  }
+
+  static Future<Database> _initDB() async {
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, 'accounting.db');
+
+    return await openDatabase(
+      path,
+      version: 1,
+      onCreate: (db, version) async {
+        await db.execute('''
+          CREATE TABLE $tableName (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            amount REAL NOT NULL,
+            merchant TEXT NOT NULL,
+            category TEXT NOT NULL,
+            time TEXT NOT NULL,
+            note TEXT,
+            source TEXT NOT NULL
+          )
+        ''');
+      },
+    );
+  }
+
+  // 插入交易
+  static Future<int> insert(model.Transaction transaction) async {
+    final db = await database;
+    return await db.insert(tableName, transaction.toMap());
+  }
+
+  // 获取所有交易
+  static Future<List<model.Transaction>> getAll() async {
+    final db = await database;
+    final maps = await db.query(tableName, orderBy: 'time DESC');
+    return maps.map((m) => model.Transaction.fromMap(m)).toList();
+  }
+
+  // 按月份获取
+  static Future<List<model.Transaction>> getByMonth(int year, int month) async {
+    final db = await database;
+    final start = DateTime(year, month, 1).toIso8601String();
+    final end = DateTime(year, month + 1, 1).toIso8601String();
+    
+    final maps = await db.query(
+      tableName,
+      where: 'time >= ? AND time < ?',
+      whereArgs: [start, end],
+      orderBy: 'time DESC',
+    );
+    return maps.map((m) => model.Transaction.fromMap(m)).toList();
+  }
+
+  // 获取分类统计
+  static Future<Map<String, double>> getCategoryStats(int year, int month) async {
+    final db = await database;
+    final start = DateTime(year, month, 1).toIso8601String();
+    final end = DateTime(year, month + 1, 1).toIso8601String();
+    
+    final result = await db.rawQuery('''
+      SELECT category, SUM(amount) as total
+      FROM $tableName
+      WHERE time >= ? AND time < ?
+      GROUP BY category
+    ''', [start, end]);
+    
+    return {
+      for (var row in result) 
+        row['category'] as String: (row['total'] as num).toDouble()
+    };
+  }
+
+  // 删除
+  static Future<int> delete(int id) async {
+    final db = await database;
+    return await db.delete(tableName, where: 'id = ?', whereArgs: [id]);
+  }
+}
